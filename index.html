@@ -28,26 +28,27 @@
             background: #000;
             border-radius: 10px;
         }
-        input, button, select {
-            margin: 10px 0;
-            padding: 10px;
-            width: 60%;
-            border-radius: 5px;
-            border: none;
-            outline: none;
-        }
         button {
             background-color: #0078d4;
             color: #fff;
             cursor: pointer;
             font-size: 16px;
+            border-radius: 5px;
+            padding: 10px 20px;
+            box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
         }
         button:hover {
             background-color: #005a9e;
         }
         #quality-selector {
-            width: 60%;
-            margin-bottom: 20px;
+            width: 120px;
+            margin-left: 10px;
+            padding: 10px;
+            background-color: black;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
         }
         #popup {
             display: flex;
@@ -94,35 +95,42 @@
 <h1>Universal Streaming Player</h1>
 <div id="player"></div>
 
-<!-- Video URL Input -->
-<input type="text" id="streamUrl" placeholder="Enter Video Stream URL (RTMP, HLS, MP4)">
-
-<!-- Quality Selector -->
-<select id="quality-selector" onchange="changeQuality()">
-    <option value="auto">Auto</option>
-    <option value="0">144p</option>
-    <option value="1">240p</option>
-    <option value="2">360p</option>
-    <option value="3">480p</option>
-    <option value="4">720p</option>
-    <option value="5">1080p</option>
-</select>
-
-<!-- Play Video Button -->
-<button onclick="loadStream()">Play Video</button>
-
-<!-- Join Telegram Button -->
-<button id="telegram-button" onclick="joinTelegram()">Join Telegram</button>
+<!-- Quality Selector and Telegram Button -->
+<div style="display: flex; justify-content: center; align-items: center;">
+    <button id="telegram-button" onclick="joinTelegram()">Join Telegram</button>
+    <select id="quality-selector" onchange="changeQuality()">
+        <option value="auto">Auto</option>
+        <option value="0">144p</option>
+        <option value="1">240p</option>
+        <option value="2">360p</option>
+        <option value="3">480p</option>
+        <option value="4">720p</option>
+        <option value="5">1080p</option>
+    </select>
+</div>
 
 <script>
     let player;
 
-    // Load the stream URL into the player
-    function loadStream() {
-        const streamUrl = document.getElementById('streamUrl').value;
+    // Function to get query parameter from URL
+    function getQueryParam(param) {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get(param);
+    }
 
-        if (!streamUrl) {
-            alert("Please enter a stream URL.");
+    // Check if URL parameter exists and load the stream
+    const streamUrl = getQueryParam('url');
+
+    if (streamUrl) {
+        loadStream(streamUrl);  // Automatically load the stream if URL is provided in the query parameter
+    } else {
+        alert("No video stream URL found in the query parameter.");
+    }
+
+    // Load the stream URL into the player
+    function loadStream(url) {
+        if (!url) {
+            alert("No URL provided.");
             return;
         }
 
@@ -131,7 +139,7 @@
 
         // Initialize Clappr player with the provided URL
         player = new Clappr.Player({
-            source: streamUrl,
+            source: url,
             parentId: "#player",
             autoPlay: true,
             height: "100%",
