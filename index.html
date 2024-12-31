@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cricket Sparx</title>
 
-    <!-- Include HLS.js Library -->
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <!-- Include Shaka Player Library -->
+    <script src="https://cdn.jsdelivr.net/npm/shaka-player@3.1.0/dist/shaka-player.compiled.js"></script>
 
     <style>
         body {
@@ -59,6 +59,7 @@
 
 <h1>Cricket Sparx</h1>
 
+<!-- Video Player Container -->
 <video id="video-player" controls></video>
 
 <div style="display: flex; justify-content: center; align-items: center; margin-top: 10px;">
@@ -84,22 +85,29 @@
         return urlParams.get(param);
     }
 
-    // Load the video using HLS.js
-    function loadStream(url) {
+    // Initialize Shaka Player
+    function initShakaPlayer(url) {
         if (!url) {
             alert("No stream URL provided!");
             return;
         }
 
-        if (Hls.isSupported()) {
-            const hls = new Hls();
-            hls.loadSource(url);
-            hls.attachMedia(player);
-        } else if (player.canPlayType('application/vnd.apple.mpegurl')) {
-            player.src = url;
-        } else {
-            alert("Your browser does not support HLS streaming.");
-        }
+        // Initialize the Shaka Player
+        const shakaPlayer = new shaka.Player(player);
+
+        // Error handling
+        shakaPlayer.addEventListener('error', onErrorEvent);
+
+        // Load the stream URL using Shaka Player
+        shakaPlayer.load(url).then(function() {
+            console.log('Stream loaded successfully');
+        }).catch(onErrorEvent);
+    }
+
+    // Error event handler for Shaka Player
+    function onErrorEvent(event) {
+        console.error('Error code', event.detail.code, 'object', event.detail);
+        alert('Error loading stream. Please try again.');
     }
 
     // Change video quality (dummy logic; needs backend support for adaptive streaming)
@@ -115,7 +123,7 @@
 
     // Auto-load stream if URL is provided
     if (streamUrl) {
-        loadStream(streamUrl);
+        initShakaPlayer(streamUrl);
     } else {
         alert("No stream URL found, contact with owner");
     }
