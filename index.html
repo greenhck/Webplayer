@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iversal Streaming Player</title>
+    <title>Cricket Sparx</title>
 
-    <!-- Include Plyr Library -->
-    <link href="https://cdn.plyr.io/3.7.5/plyr.css" rel="stylesheet">
-    <script src="https://cdn.plyr.io/3.7.5/plyr.js"></script>
+    <!-- Include HLS.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
     <style>
         body {
@@ -24,12 +23,12 @@
         h1 {
             margin: 10px 0;
         }
-        #player {
+        #video-player {
             width: 80%;
             max-width: 800px;
             height: 450px;
-            border: 2px solid #444;
             background: #000;
+            border: 2px solid #444;
             border-radius: 10px;
         }
         button {
@@ -58,87 +57,67 @@
 </head>
 <body>
 
-<h1>Universal Streaming Player</h1>
+<h1>Cricket Sparx</h1>
 
-<video id="player" class="plyr" controls></video>
+<video id="video-player" controls></video>
 
-<!-- Quality Selector and Telegram Button -->
-<div style="display: flex; justify-content: center; align-items: center;">
+<div style="display: flex; justify-content: center; align-items: center; margin-top: 10px;">
     <button id="telegram-button" onclick="joinTelegram()">Join Telegram</button>
     <select id="quality-selector" onchange="changeQuality()">
         <option value="auto">Auto</option>
-        <option value="0">144p</option>
-        <option value="1">240p</option>
-        <option value="2">360p</option>
-        <option value="3">480p</option>
-        <option value="4">720p</option>
-        <option value="5">1080p</option>
+        <option value="144p">144p</option>
+        <option value="240p">240p</option>
+        <option value="360p">360p</option>
+        <option value="480p">480p</option>
+        <option value="720p">720p</option>
+        <option value="1080p">1080p</option>
     </select>
 </div>
 
 <script>
-    let player;
-    let streamUrl;
-    let sources = [];
+    let player = document.getElementById('video-player');
+    let streamUrl = getQueryParam('url'); // Get the stream URL from query parameters
 
-    // Function to get query parameter from URL
+    // Function to get query parameter
     function getQueryParam(param) {
         const urlParams = new URLSearchParams(window.location.search);
         return urlParams.get(param);
     }
 
-    // Check if URL parameter exists and load the stream
-    streamUrl = getQueryParam('url');
-
-    if (streamUrl) {
-        loadStream(streamUrl);  // Automatically load the stream if URL is provided in the query parameter
-    } else {
-        alert("No video stream URL found in the query parameter.");
-    }
-
-    // Load the stream URL into the player
+    // Load the video using HLS.js
     function loadStream(url) {
         if (!url) {
-            alert("No URL provided.");
+            alert("No stream URL provided!");
             return;
         }
 
-        // Initialize Plyr player
-        player = new Plyr('#player', {
-            autoplay: true,
-            controls: ['play', 'progress', 'current-time', 'mute', 'volume', 'fullscreen']
-        });
-
-        // Check if the stream URL is a valid .m3u8 (HLS) URL
-        if (url.endsWith('.m3u8')) {
-            player.source = {
-                type: 'video',
-                sources: [
-                    {
-                        src: url,
-                        type: 'application/x-mpegURL',
-                    },
-                ],
-            };
+        if (Hls.isSupported()) {
+            const hls = new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(player);
+        } else if (player.canPlayType('application/vnd.apple.mpegurl')) {
+            player.src = url;
         } else {
-            alert("The stream URL is not a valid .m3u8 link.");
+            alert("Your browser does not support HLS streaming.");
         }
     }
 
-    // Change video quality based on selection
+    // Change video quality (dummy logic; needs backend support for adaptive streaming)
     function changeQuality() {
-        const qualitySelector = document.getElementById('quality-selector');
-        const selectedQualityIndex = qualitySelector.value;
-
-        // For simplicity, assuming that each quality option corresponds to a different resolution.
-        // This can be expanded to switch streams or change parameters dynamically.
-        let newUrl = streamUrl + '?quality=' + selectedQualityIndex;
-        loadStream(newUrl);
+        const quality = document.getElementById('quality-selector').value;
+        alert(`Selected Quality: ${quality}. Adaptive streaming required for implementation.`);
     }
 
-    // Function to open Telegram channel
+    // Join Telegram group
     function joinTelegram() {
         window.open('https://t.me/CricketSparx', '_blank');
+    }
+
+    // Auto-load stream if URL is provided
+    if (streamUrl) {
+        loadStream(streamUrl);
+    } else {
+        alert("No stream URL found, contact with owner");
     }
 </script>
 
