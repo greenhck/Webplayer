@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Universal Streaming Player</title>
-    <script src="https://cdn.jsdelivr.net/npm/clappr@latest"></script>
+
+    <!-- Include JW Player Script -->
+    <script type="text/javascript" src="https://content.jwplatform.com/libraries/your-jwplayer-key.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -127,34 +129,28 @@
         alert("No video stream URL found in the query parameter.");
     }
 
-    // Load the stream URL into the player
+    // Load the stream URL into the player using JW Player
     function loadStream(url) {
         if (!url) {
             alert("No URL provided.");
             return;
         }
 
-        // Destroy the existing player instance if any
-        if (player) player.destroy();
-
-        // Initialize Clappr player with the provided URL
-        player = new Clappr.Player({
-            source: url,
-            parentId: "#player",
-            autoPlay: true,
-            height: "100%",
+        // Initialize JW Player with the provided URL
+        player = jwplayer("player").setup({
+            file: url,
             width: "100%",
-            playback: {
-                controls: true,
-            },
+            height: "100%",
+            autostart: true,
+            controls: true,
         });
 
         // Listen for available quality levels and add to the selector
-        player.on(Clappr.Events.PLAYBACK_LEVELS_AVAILABLE, function(levels) {
+        player.on('levelsChanged', function(event) {
             const qualitySelector = document.getElementById('quality-selector');
             qualitySelector.innerHTML = '<option value="auto">Auto</option>'; // Reset quality options
 
-            levels.forEach((level, index) => {
+            event.levels.forEach((level, index) => {
                 const option = document.createElement('option');
                 option.value = index;
                 option.textContent = `${level.height}p`;
@@ -169,9 +165,9 @@
         const quality = qualitySelector.value;
 
         if (quality === 'auto') {
-            player.setCurrentLevel(-1); // Auto quality
+            player.setCurrentQuality(-1); // Auto quality
         } else {
-            player.setCurrentLevel(parseInt(quality)); // Set selected quality
+            player.setCurrentQuality(parseInt(quality)); // Set selected quality
         }
     }
 
