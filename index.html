@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Universal Streaming Player</title>
 
-    <!-- Include JW Player Script -->
-    <script type="text/javascript" src="https://content.jwplatform.com/libraries/your-jwplayer-key.js"></script>
+    <!-- Include Video.js Library -->
+    <link href="https://vjs.zencdn.net/7.21.0/video-js.css" rel="stylesheet">
+    <script src="https://vjs.zencdn.net/7.21.0/video.js"></script>
+    
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -95,7 +97,7 @@
 </div>
 
 <h1>Universal Streaming Player</h1>
-<div id="player"></div>
+<video id="player" class="video-js vjs-default-skin" controls preload="auto"></video>
 
 <!-- Quality Selector and Telegram Button -->
 <div style="display: flex; justify-content: center; align-items: center;">
@@ -113,6 +115,8 @@
 
 <script>
     let player;
+    let streamUrl;
+    let sources = [];
 
     // Function to get query parameter from URL
     function getQueryParam(param) {
@@ -121,7 +125,7 @@
     }
 
     // Check if URL parameter exists and load the stream
-    const streamUrl = getQueryParam('url');
+    streamUrl = getQueryParam('url');
 
     if (streamUrl) {
         loadStream(streamUrl);  // Automatically load the stream if URL is provided in the query parameter
@@ -129,46 +133,58 @@
         alert("No video stream URL found in the query parameter.");
     }
 
-    // Load the stream URL into the player using JW Player
+    // Load the stream URL into the player
     function loadStream(url) {
         if (!url) {
             alert("No URL provided.");
             return;
         }
 
-        // Initialize JW Player with the provided URL
-        player = jwplayer("player").setup({
-            file: url,
-            width: "100%",
-            height: "100%",
-            autostart: true,
-            controls: true,
+        // Initialize Video.js player with the provided URL
+        player = videojs('player', {
+            sources: [{
+                src: url,
+                type: 'application/x-mpegURL'  // For HLS streams
+            }],
+            autoplay: true,
+            controls: true
         });
 
-        // Listen for available quality levels and add to the selector
-        player.on('levelsChanged', function(event) {
-            const qualitySelector = document.getElementById('quality-selector');
-            qualitySelector.innerHTML = '<option value="auto">Auto</option>'; // Reset quality options
+        // Set quality levels for stream
+        sources = [
+            { src: url, type: 'application/x-mpegURL', label: 'Auto' },
+            { src: url + '?quality=144p', type: 'application/x-mpegURL', label: '144p' },
+            { src: url + '?quality=240p', type: 'application/x-mpegURL', label: '240p' },
+            { src: url + '?quality=360p', type: 'application/x-mpegURL', label: '360p' },
+            { src: url + '?quality=480p', type: 'application/x-mpegURL', label: '480p' },
+            { src: url + '?quality=720p', type: 'application/x-mpegURL', label: '720p' },
+            { src: url + '?quality=1080p', type: 'application/x-mpegURL', label: '1080p' },
+        ];
 
-            event.levels.forEach((level, index) => {
-                const option = document.createElement('option');
-                option.value = index;
-                option.textContent = `${level.height}p`;
-                qualitySelector.appendChild(option);
-            });
+        // Populate the quality selector
+        updateQualitySelector();
+    }
+
+    // Function to update the quality selector
+    function updateQualitySelector() {
+        const qualitySelector = document.getElementById('quality-selector');
+        qualitySelector.innerHTML = '';  // Clear existing options
+
+        sources.forEach((source, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = source.label;
+            qualitySelector.appendChild(option);
         });
     }
 
     // Change video quality based on selection
     function changeQuality() {
         const qualitySelector = document.getElementById('quality-selector');
-        const quality = qualitySelector.value;
+        const selectedQualityIndex = qualitySelector.value;
+        const selectedSource = sources[selectedQualityIndex];
 
-        if (quality === 'auto') {
-            player.setCurrentQuality(-1); // Auto quality
-        } else {
-            player.setCurrentQuality(parseInt(quality)); // Set selected quality
-        }
+        player.src({ src: selectedSource.src, type: selectedSource.type });
     }
 
     // Function to handle "Join Now" button
