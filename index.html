@@ -8,7 +8,9 @@
     <!-- Include Video.js Library -->
     <link href="https://vjs.zencdn.net/7.21.0/video-js.css" rel="stylesheet">
     <script src="https://vjs.zencdn.net/7.21.0/video.js"></script>
-    
+    <!-- Include HLS.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -97,6 +99,7 @@
 </div>
 
 <h1>Universal Streaming Player</h1>
+
 <video id="player" class="video-js vjs-default-skin" controls preload="auto"></video>
 
 <!-- Quality Selector and Telegram Button -->
@@ -115,6 +118,7 @@
 
 <script>
     let player;
+    let hls;
     let streamUrl;
     let sources = [];
 
@@ -140,29 +144,28 @@
             return;
         }
 
-        // Initialize Video.js player with the provided URL
+        // Initialize Video.js player
         player = videojs('player', {
-            sources: [{
-                src: url,
-                type: 'application/x-mpegURL'  // For HLS streams
-            }],
             autoplay: true,
             controls: true
         });
 
-        // Set quality levels for stream
-        sources = [
-            { src: url, type: 'application/x-mpegURL', label: 'Auto' },
-            { src: url + '?quality=144p', type: 'application/x-mpegURL', label: '144p' },
-            { src: url + '?quality=240p', type: 'application/x-mpegURL', label: '240p' },
-            { src: url + '?quality=360p', type: 'application/x-mpegURL', label: '360p' },
-            { src: url + '?quality=480p', type: 'application/x-mpegURL', label: '480p' },
-            { src: url + '?quality=720p', type: 'application/x-mpegURL', label: '720p' },
-            { src: url + '?quality=1080p', type: 'application/x-mpegURL', label: '1080p' },
-        ];
-
-        // Populate the quality selector
-        updateQualitySelector();
+        // Check if HLS.js is supported in the browser
+        if (Hls.isSupported()) {
+            hls = new Hls();
+            hls.loadSource(url); // Load the m3u8 stream URL
+            hls.attachMedia(player.tech().el()); // Attach HLS.js to Video.js player
+            hls.on(Hls.Events.MANIFEST_PARSED, function () {
+                // Get quality levels from the stream and update the quality selector
+                sources = hls.levels.map((level, index) => ({
+                    src: url + '?quality=' + level.height,
+                    label: level.height + 'p'
+                }));
+                updateQualitySelector();
+            });
+        } else {
+            alert("Your browser does not support HLS.");
+        }
     }
 
     // Function to update the quality selector
@@ -184,7 +187,7 @@
         const selectedQualityIndex = qualitySelector.value;
         const selectedSource = sources[selectedQualityIndex];
 
-        player.src({ src: selectedSource.src, type: selectedSource.type });
+        hls.loadSource(selectedSource.src); // Load selected quality
     }
 
     // Function to handle "Join Now" button
