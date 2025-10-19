@@ -3,131 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cricket Sparx</title>
-
-    <!-- Include Shaka Player Library -->
-    <script src="https://cdn.jsdelivr.net/npm/shaka-player@3.1.0/dist/shaka-player.compiled.js"></script>
-
+    <title>Stream Player</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background-color: #1e1e1e;
-            color: #fff;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
+            font-family: 'Inter', sans-serif;
         }
-        h1 {
-            margin: 10px 0;
+        /* Custom styling for the video container to maintain aspect ratio and center it */
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+            height: 0;
+            overflow: hidden;
+            max-width: 100%;
         }
-        #video-player {
-            width: 80%;
-            max-width: 800px;
-            height: 450px;
-            background: #000;
-            border: 2px solid #444;
-            border-radius: 10px;
-        }
-        button {
-            background-color: #0078d4;
-            color: #fff;
-            cursor: pointer;
-            font-size: 16px;
-            border-radius: 5px;
-            padding: 10px 20px;
-            box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
-        }
-        button:hover {
-            background-color: #005a9e;
-        }
-        #quality-selector {
-            width: 120px;
-            margin-left: 10px;
-            padding: 10px;
-            background-color: black;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
+        .video-container video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
         }
     </style>
+    <!-- Load hls.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
-<body>
+<body class="bg-gray-50 flex items-center justify-center min-h-screen p-4">
 
-<h1>Cricket Sparx</h1>
+    <div class="w-full max-w-4xl bg-white rounded-xl shadow-2xl p-6 md:p-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-4 text-center">Live Stream Viewer</h1>
+        <p class="text-gray-500 mb-6 text-center">Loading stream via CORS proxy...</p>
 
-<!-- Video Player Container -->
-<video id="video-player" controls></video>
+        <!-- Video Player Container (16:9 Aspect Ratio) -->
+        <div class="video-container rounded-lg border-4 border-indigo-600 shadow-xl mb-6">
+            <video id="video-player" controls autoplay class="rounded-md bg-black"></video>
+        </div>
 
-<div style="display: flex; justify-content: center; align-items: center; margin-top: 10px;">
-    <button id="telegram-button" onclick="joinTelegram()">Join Telegram</button>
-    <select id="quality-selector" onchange="changeQuality()">
-        <option value="auto">Auto</option>
-        <option value="144p">144p</option>
-        <option value="240p">240p</option>
-        <option value="360p">360p</option>
-        <option value="480p">480p</option>
-        <option value="720p">720p</option>
-        <option value="1080p">1080p</option>
-    </select>
-</div>
+        <!-- Status/Error Message Box -->
+        <div id="status-message" class="p-4 bg-indigo-100 border border-indigo-300 text-indigo-800 rounded-lg text-sm transition duration-300 ease-in-out">
+            Initializing HLS stream...
+        </div>
 
-<script>
-    let player = document.getElementById('video-player');
-    let streamUrl = getQueryParam('url'); // Get the stream URL from query parameters
+    </div>
 
-    // Function to get query parameter
-    function getQueryParam(param) {
-        const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get(param);
-    }
+    <script>
+        // Global variables provided for the environment (required structure)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-    // Initialize Shaka Player
-    function initShakaPlayer(url) {
-        if (!url) {
-            alert("No stream URL provided!");
-            return;
-        }
+        document.addEventListener('DOMContentLoaded', () => {
+            const video = document.getElementById('video-player');
+            const statusMessage = document.getElementById('status-message');
 
-        // Initialize the Shaka Player
-        const shakaPlayer = new shaka.Player(player);
+            // --- Configuration ---
+            const streamUrl = 'http://116.90.120.149:8000/play/a0bv/index.m3u8';
+            const proxyUrl = 'https://cors-anywhere.24862486gill.workers.dev/';
+            
+            // Construct the final URL: Proxy + Stream URL
+            const finalSource = proxyUrl + streamUrl;
 
-        // Error handling
-        shakaPlayer.addEventListener('error', onErrorEvent);
+            /**
+             * Updates the status message box with color and text.
+             * @param {string} text - The message content.
+             * @param {string} type - 'info', 'error', or 'success'.
+             */
+            function updateStatus(text, type = 'info') {
+                let classes = 'p-4 border text-sm rounded-lg';
+                if (type === 'error') {
+                    classes += ' bg-red-100 border-red-300 text-red-800';
+                } else if (type === 'success') {
+                    classes += ' bg-green-100 border-green-300 text-green-800';
+                } else { // info
+                    classes += ' bg-indigo-100 border-indigo-300 text-indigo-800';
+                }
+                statusMessage.className = classes;
+                statusMessage.textContent = text;
+            }
 
-        // Load the stream URL using Shaka Player
-        shakaPlayer.load(url).then(function() {
-            console.log('Stream loaded successfully');
-        }).catch(onErrorEvent);
-    }
 
-    // Error event handler for Shaka Player
-    function onErrorEvent(event) {
-        console.error('Error code', event.detail.code, 'object', event.detail);
-        alert('Error loading stream. Please try again.');
-    }
+            if (Hls.isSupported()) {
+                updateStatus('HLS is supported. Loading stream...');
+                
+                const hls = new Hls();
 
-    // Change video quality (dummy logic; needs backend support for adaptive streaming)
-    function changeQuality() {
-        const quality = document.getElementById('quality-selector').value;
-        alert(`Selected Quality: ${quality}. Adaptive streaming required for implementation.`);
-    }
+                // 1. Attach the video stream source
+                hls.loadSource(finalSource);
+                
+                // 2. Attach the HLS object to the video element
+                hls.attachMedia(video);
 
-    // Join Telegram group
-    function joinTelegram() {
-        window.open('https://t.me/CricketSparx', '_blank');
-    }
+                // 3. Listen for HLS events for status updates
+                hls.on(Hls.Events.MEDIA_ATTACHED, function () {
+                    updateStatus('Media attached. Loading manifest...', 'info');
+                    video.muted = true; // Mute initially to comply with autoplay policies
+                    video.play()
+                        .then(() => {
+                            updateStatus('Stream loaded and attempting to play.', 'success');
+                            video.muted = false; // Unmute if user interaction is detected later
+                        })
+                        .catch(e => {
+                            updateStatus(`Autoplay failed (muted or unmuted). Please click 'Play' manually. (${e.message})`, 'info');
+                        });
+                });
 
-    // Auto-load stream if URL is provided
-    if (streamUrl) {
-        initShakaPlayer(streamUrl);
-    } else {
-        alert("No stream URL found, contact with owner");
-    }
-</script>
+                hls.on(Hls.Events.ERROR, function (event, data) {
+                    if (data.fatal) {
+                        let errorMessage = `Fatal HLS Error: ${data.details}.`;
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                errorMessage += ' A network issue occurred (CORS or stream URL might be unreachable/down).';
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                errorMessage += ' A media decoding error occurred.';
+                                break;
+                            default:
+                                errorMessage += ' The stream could not be loaded.';
+                                break;
+                        }
+                        updateStatus(errorMessage, 'error');
+                        hls.destroy(); // Destroy HLS instance on fatal error
+                    }
+                });
+
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // For native HLS support (e.g., Safari on desktop/mobile)
+                updateStatus('Browser supports native HLS. Attempting direct load...', 'info');
+                video.src = finalSource;
+                video.addEventListener('loadedmetadata', function() {
+                    video.play();
+                });
+                video.addEventListener('error', (e) => {
+                     updateStatus(`Native player error: Could not load the stream. Check the proxy/URL.`, 'error');
+                });
+            } else {
+                updateStatus('Your browser does not support HLS streaming. Please use a modern browser.', 'error');
+            }
+        });
+    </script>
 
 </body>
 </html>
