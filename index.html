@@ -3,147 +3,899 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stream Player</title>
+    <title>Ultimate Pro Video Player</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load Inter Font -->
+    <!-- Load Shaka Player -->
+    <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.3.11/dist/shaka-player.compiled.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
+        /* Custom styles for professional look and feel */
+        :root {
+            --player-dark: #121212;
+            --player-accent: #3b82f6; /* Blue-500 */
+        }
         body {
             font-family: 'Inter', sans-serif;
+            background-color: var(--player-dark);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow-x: hidden;
         }
-        /* Custom styling for the video container to maintain aspect ratio and center it */
-        .video-container {
+
+        /* Player Container */
+        #videoContainer {
             position: relative;
-            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
-            height: 0;
+            width: 100%;
+            max-width: 1280px;
+            aspect-ratio: 16 / 9;
+            background-color: #000;
+            border-radius: 12px;
             overflow: hidden;
-            max-width: 100%;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
         }
-        .video-container video {
+
+        /* Video Element */
+        #videoPlayer {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #videoPlayer::-webkit-media-controls {
+            display: none !important;
+        }
+        #videoPlayer::--media-controls {
+            display: none !important;
+        }
+
+        /* Controls Overlay */
+        .controls-overlay {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            z-index: 10;
+            transition: opacity 0.3s, background 0.3s;
+            pointer-events: none; /* Allows clicks to pass through by default */
+        }
+        .controls-visible {
+            opacity: 1;
+            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.5) 10%, transparent 50%, rgba(0,0,0,0.5) 90%, rgba(0,0,0,0.8) 100%);
+            pointer-events: auto;
+        }
+        .controls-hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Custom Progress Bar */
+        #progressBar {
+            height: 4px;
+            cursor: pointer;
+            width: 100%;
+            background-color: rgba(255, 255, 255, 0.3);
+            position: absolute;
+            bottom: 60px; /* Above bottom control bar */
+            left: 0;
+        }
+        #progressRail {
+            height: 100%;
+            width: 0%;
+            background-color: var(--player-accent);
+            position: relative;
+            transition: width 0.1s linear;
+        }
+        #seekHandle {
+            position: absolute;
+            right: -6px;
+            top: -6px;
+            width: 16px;
+            height: 16px;
+            background-color: var(--player-accent);
+            border-radius: 50%;
+            transform: scale(0);
+            transition: transform 0.1s;
+        }
+        #progressBar:hover #seekHandle {
+            transform: scale(1);
+        }
+
+        /* Quality/Speed Popover */
+        .popover {
+            position: absolute;
+            bottom: 70px; /* Above the bottom controls */
+            right: 16px;
+            background-color: rgba(0, 0, 0, 0.9);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            max-height: 300px;
+            overflow-y: auto;
+            width: 150px;
+            opacity: 0;
+            transform: translateY(10px);
+            pointer-events: none;
+            transition: opacity 0.2s, transform 0.2s;
+            z-index: 20;
+        }
+        .popover-open {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+        .popover-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: background-color 0.15s;
+        }
+        .popover-item:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .popover-item.active {
+            color: var(--player-accent);
+            font-weight: 600;
+        }
+
+        /* Seek Indicator (Double Tap/Click) */
+        .seek-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            font-size: 2rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+            z-index: 15;
+        }
+        .seek-indicator svg {
+            width: 3rem;
+            height: 3rem;
+            margin-bottom: 8px;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid var(--player-accent);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 12;
+        }
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        /* Kids Lock */
+        .kid-locked {
+            pointer-events: none !important;
+        }
+        #kidsLockOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none; /* Starts hidden */
+            justify-content: center;
+            align-items: center;
+            z-index: 30;
+            cursor: pointer;
+        }
+        #kidsLockOverlay.active {
+            display: flex;
+        }
+
+        /* Telegram Popup */
+        #telegramPopup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            background: #2299cc; /* Telegram blue */
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            color: white;
+            text-align: center;
+            z-index: 100;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease-in-out;
+        }
+        #telegramPopup.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            #videoContainer {
+                max-width: 100%;
+                border-radius: 0;
+                margin-top: 0;
+            }
+            .controls-bottom {
+                padding-left: 8px;
+                padding-right: 8px;
+            }
+            .popover {
+                right: 8px;
+            }
+            .seek-indicator {
+                font-size: 1.5rem;
+                padding: 12px 18px;
+            }
         }
     </style>
-    <!-- Load hls.js library -->
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
-<body class="bg-gray-50 flex items-center justify-center min-h-screen p-4">
+<body>
 
-    <div class="w-full max-w-4xl bg-white rounded-xl shadow-2xl p-6 md:p-8">
-        <h1 class="text-3xl font-bold text-gray-800 mb-4 text-center">Live Stream Viewer</h1>
-        <p class="text-gray-500 mb-6 text-center">Loading stream via CORS proxy...</p>
+    <div id="videoContainer" class="relative">
+        <video id="videoPlayer" class="object-contain" playsinline></video>
 
-        <!-- Video Player Container (16:9 Aspect Ratio) -->
-        <div class="video-container rounded-lg border-4 border-indigo-600 shadow-xl mb-6">
-            <video id="video-player" controls autoplay class="rounded-md bg-black"></video>
+        <!-- Loading Spinner -->
+        <div id="loadingSpinner" class="spinner hidden"></div>
+
+        <!-- Kids Lock Overlay (Starts hidden) -->
+        <div id="kidsLockOverlay" title="Kids Lock: Click to Unlock">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-16 h-16 text-white cursor-pointer">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 0 0-9 0v3.75m6 0h.008v.008h-.008v-.008Zm1.5 6h-.008v.008h-.008v-.008Zm-4.5 0h.008v.008h-.008v-.008Zm1.5 6h-.008v.008h-.008v-.008Z" />
+            </svg>
+            <span class="absolute top-1/2 mt-20 text-xl font-bold text-white">Tap to Unlock</span>
         </div>
 
-        <!-- Status/Error Message Box -->
-        <div id="status-message" class="p-4 bg-indigo-100 border border-indigo-300 text-indigo-800 rounded-lg text-sm transition duration-300 ease-in-out">
-            Initializing HLS stream...
+        <!-- Custom Controls Overlay -->
+        <div id="controlsOverlay" class="controls-overlay controls-visible">
+
+            <!-- Top Controls (Title/Placeholder) -->
+            <div class="absolute top-0 left-0 w-full p-4 text-white text-lg font-semibold pointer-events-none">
+                <span id="videoTitle">Pro Stream Player</span>
+            </div>
+
+            <!-- Seek Indicators (For Gestures) -->
+            <div id="seekForward" class="seek-indicator flex flex-col items-center right-1/4 translate-x-1/2 hidden">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>
+                <span id="forwardText">+10s</span>
+            </div>
+            <div id="seekBackward" class="seek-indicator flex flex-col items-center left-1/4 -translate-x-1/2 hidden">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>
+                <span id="backwardText">-10s</span>
+            </div>
+
+            <!-- Custom Progress Bar (Above bottom bar) -->
+            <div id="progressBar">
+                <div id="progressRail">
+                    <div id="seekHandle"></div>
+                </div>
+            </div>
+
+            <!-- Bottom Controls Bar -->
+            <div class="controls-bottom absolute bottom-0 left-0 w-full flex items-center justify-between p-3 text-white">
+                <div class="flex items-center space-x-3">
+                    <!-- Play/Pause Button -->
+                    <button id="playPauseButton" class="p-1 rounded-full hover:bg-white/10 transition">
+                        <svg id="playIcon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 0 1 0 1.971l-11.54 6.347a1.125 1.125 0 0 1-1.667-.985V5.653Z" /></svg>
+                        <svg id="pauseIcon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 hidden"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" /></svg>
+                    </button>
+
+                    <!-- Time Display -->
+                    <div id="timeDisplay" class="text-sm font-mono tracking-wider">00:00 / 00:00</div>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                    <!-- Quality Popover Trigger -->
+                    <div class="relative">
+                        <button id="qualityButton" class="p-2 rounded hover:bg-white/10 transition text-sm font-semibold">
+                            <span id="currentQuality">Auto</span>
+                        </button>
+                        <div id="qualityPopover" class="popover text-white">
+                            <h4 class="px-3 py-2 text-xs font-bold text-gray-400">Quality</h4>
+                            <!-- Quality options will be inserted here by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Speed Popover Trigger -->
+                    <div class="relative">
+                        <button id="speedButton" class="p-2 rounded hover:bg-white/10 transition text-sm font-semibold">
+                            <span id="currentSpeed">1.0x</span>
+                        </button>
+                        <div id="speedPopover" class="popover text-white">
+                            <h4 class="px-3 py-2 text-xs font-bold text-gray-400">Playback Speed</h4>
+                            <div class="popover-item active" data-speed="1.0">Normal (1.0x)</div>
+                            <div class="popover-item" data-speed="0.5">0.5x</div>
+                            <div class="popover-item" data-speed="0.75">0.75x</div>
+                            <div class="popover-item" data-speed="1.25">1.25x</div>
+                            <div class="popover-item" data-speed="1.5">1.5x</div>
+                            <div class="popover-item" data-speed="2.0">2.0x</div>
+                        </div>
+                    </div>
+
+                    <!-- PiP Button -->
+                    <button id="pipButton" title="Picture-in-Picture" class="p-2 rounded hover:bg-white/10 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0ZM3.75 5.25h16.5A1.5 1.5 0 0 1 22.5 6.75v10.5a1.5 1.5 0 0 1-1.5 1.5H3.75a1.5 1.5 0 0 1-1.5-1.5V6.75a1.5 1.5 0 0 1 1.5-1.5Z" /><path d="M10.5 18H7.5a1.5 1.5 0 0 1-1.5-1.5V10.5a1.5 1.5 0 0 1 1.5-1.5h3" /></svg>
+                    </button>
+
+                    <!-- Kids Lock Button -->
+                    <!-- Removed initial classes, managed entirely by JS -->
+                    <button id="toggleKidsLockButton" title="Kids Lock" class="p-2 rounded hover:bg-white/10 transition">
+                        <!-- Closed Lock Icon (Shows when UNLOCKED, click to lock) -->
+                        <svg id="lockIcon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-white"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m3 0h-1.5a2.25 2.25 0 0 0-2.25 2.25v3.75a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25v-3.75a2.25 2.25 0 0 0-2.25-2.25H13.5Z" /></svg>
+                        <!-- Open Lock Icon (Shows when LOCKED, click to unlock) -->
+                        <svg id="unlockIcon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 hidden text-green-500"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 1 1 9 0v3.75M3.75 21V10.5m0 0a2.25 2.25 0 0 1 2.25-2.25h1.5m-4.5 4.5a2.25 2.25 0 0 0 2.25 2.25h13.5a2.25 2.25 0 0 0 2.25-2.25v-4.5a2.25 2.25 0 0 0-2.25-2.25h-13.5a2.25 2.25 0 0 0-2.25 2.25v4.5" /></svg>
+                    </button>
+
+
+                    <!-- Fullscreen Button -->
+                    <button id="fullscreenButton" title="Fullscreen" class="p-2 rounded hover:bg-white/10 transition">
+                        <svg id="fullscreenIcon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25h4.5m-4.5 0v-4.5m0 4.5L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg>
+                        <svg id="exitFullscreenIcon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 hidden"><path stroke-linecap="round" stroke-linejoin="round" d="M9 9l6-6m0 0V3m0 0h-4.5M3 15l6 6m0 0v-4.5M3 15h4.5m13.5 0l-6 6m0 0v-4.5m0 4.5h-4.5M21 9l-6-6m0 0v4.5m0-4.5h4.5" /></svg>
+                    </button>
+                </div>
+            </div>
         </div>
 
     </div>
 
+    <!-- Telegram Popup -->
+    <div id="telegramPopup">
+        <h3 class="text-xl font-bold mb-2">👋 Join Our Community!</h3>
+        <p class="mb-4 text-sm">For stream updates, new features, and announcements, join our Telegram channel.</p>
+        <a href="https://t.me/placeholder_channel" target="_blank" class="bg-white text-blue-500 font-bold py-2 px-6 rounded-full inline-block transition hover:bg-gray-100">
+            Join Telegram
+        </a>
+        <button id="closePopup" class="absolute top-2 right-2 text-white/80 hover:text-white transition">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+        </button>
+    </div>
+
+    <!-- Message Box for Alerts (No alert() used) -->
+    <div id="messageBox" class="fixed bottom-4 right-4 bg-red-600 text-white p-4 rounded-lg shadow-xl opacity-0 transition-opacity duration-300 pointer-events-none z-50"></div>
+
     <script>
-        // Global variables provided for the environment (required structure)
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // Global Constants
+        const VIDEO_PLAYER = document.getElementById('videoPlayer');
+        const VIDEO_CONTAINER = document.getElementById('videoContainer');
+        const CONTROLS_OVERLAY = document.getElementById('controlsOverlay');
+        const PROGRESS_BAR = document.getElementById('progressBar');
+        const PROGRESS_RAIL = document.getElementById('progressRail');
+        const PLAY_PAUSE_BTN = document.getElementById('playPauseButton');
+        const PLAY_ICON = document.getElementById('playIcon');
+        const PAUSE_ICON = document.getElementById('pauseIcon');
+        const TIME_DISPLAY = document.getElementById('timeDisplay');
+        const QUALITY_BTN = document.getElementById('qualityButton');
+        const QUALITY_POP = document.getElementById('qualityPopover');
+        const CURRENT_QUALITY = document.getElementById('currentQuality');
+        const SPEED_BTN = document.getElementById('speedButton');
+        const SPEED_POP = document.getElementById('speedPopover');
+        const FULLSCREEN_BTN = document.getElementById('fullscreenButton');
+        const FS_ICON = document.getElementById('fullscreenIcon');
+        const EXIT_FS_ICON = document.getElementById('exitFullscreenIcon');
+        const LOADING_SPINNER = document.getElementById('loadingSpinner');
+        const TELEGRAM_POPUP = document.getElementById('telegramPopup');
+        const KIDS_LOCK_OVERLAY = document.getElementById('kidsLockOverlay');
+        const TOGGLE_LOCK_BTN = document.getElementById('toggleKidsLockButton');
+        const LOCK_ICON = document.getElementById('lockIcon');
+        const UNLOCK_ICON = document.getElementById('unlockIcon');
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const video = document.getElementById('video-player');
-            const statusMessage = document.getElementById('status-message');
+        let shakaPlayer = null;
+        let controlsTimeout = null;
+        let isSeeking = false;
+        let isKidsLocked = false; // Start unlocked as per user request
 
-            // --- Configuration ---
-            const streamUrl = 'http://116.90.120.149:8000/play/a0bv/index.m3u8';
-            const proxyUrl = 'https://cors-anywhere.24862486gill.workers.dev/';
-            
-            // Construct the final URL: Proxy + Stream URL
-            const finalSource = proxyUrl + streamUrl;
+        /** Utility Function: Custom Message Box (Replaces alert()) */
+        function showMessage(message, duration = 3000, isError = true) {
+            const box = document.getElementById('messageBox');
+            box.textContent = message;
+            box.className = `fixed bottom-4 right-4 p-4 rounded-lg shadow-xl opacity-100 transition-opacity duration-300 z-50 ${isError ? 'bg-red-600' : 'bg-green-600'}`;
+            setTimeout(() => {
+                box.classList.remove('opacity-100');
+                box.classList.add('opacity-0');
+            }, duration);
+        }
 
-            /**
-             * Updates the status message box with color and text.
-             * @param {string} text - The message content.
-             * @param {string} type - 'info', 'error', or 'success'.
-             */
-            function updateStatus(text, type = 'info') {
-                let classes = 'p-4 border text-sm rounded-lg';
-                if (type === 'error') {
-                    classes += ' bg-red-100 border-red-300 text-red-800';
-                } else if (type === 'success') {
-                    classes += ' bg-green-100 border-green-300 text-green-800';
-                } else { // info
-                    classes += ' bg-indigo-100 border-indigo-300 text-indigo-800';
+        /** Utility Function: Time Formatting */
+        function formatTime(seconds) {
+            const date = new Date(null);
+            date.setSeconds(seconds);
+            return date.toISOString().substr(11, 8).replace(/^00:/, '');
+        }
+
+        /** Player Core: Shaka Initialization and Setup */
+        function initShakaPlayer(videoUrl, drmInfo) {
+            if (!shakaPlayer) {
+                shaka.polyfill.installAll();
+                if (shaka.Player.is || !shaka.Player.is){
+                    shakaPlayer = new shaka.Player(VIDEO_PLAYER);
+                    window.player = shakaPlayer; // Global access for debugging
+                    shakaPlayer.addEventListener('error', onErrorEvent);
+                } else {
+                    showMessage("Shaka Player is not supported by this browser.");
+                    return;
                 }
-                statusMessage.className = classes;
-                statusMessage.textContent = text;
             }
 
-
-            if (Hls.isSupported()) {
-                updateStatus('HLS is supported. Loading stream...');
-                
-                const hls = new Hls();
-
-                // 1. Attach the video stream source
-                hls.loadSource(finalSource);
-                
-                // 2. Attach the HLS object to the video element
-                hls.attachMedia(video);
-
-                // 3. Listen for HLS events for status updates
-                hls.on(Hls.Events.MEDIA_ATTACHED, function () {
-                    updateStatus('Media attached. Loading manifest...', 'info');
-                    video.muted = true; // Mute initially to comply with autoplay policies
-                    video.play()
-                        .then(() => {
-                            updateStatus('Stream loaded and attempting to play.', 'success');
-                            video.muted = false; // Unmute if user interaction is detected later
-                        })
-                        .catch(e => {
-                            updateStatus(`Autoplay failed (muted or unmuted). Please click 'Play' manually. (${e.message})`, 'info');
-                        });
-                });
-
-                hls.on(Hls.Events.ERROR, function (event, data) {
-                    if (data.fatal) {
-                        let errorMessage = `Fatal HLS Error: ${data.details}.`;
-                        switch (data.type) {
-                            case Hls.ErrorTypes.NETWORK_ERROR:
-                                errorMessage += ' A network issue occurred (CORS or stream URL might be unreachable/down).';
-                                break;
-                            case Hls.ErrorTypes.MEDIA_ERROR:
-                                errorMessage += ' A media decoding error occurred.';
-                                break;
-                            default:
-                                errorMessage += ' The stream could not be loaded.';
-                                break;
-                        }
-                        updateStatus(errorMessage, 'error');
-                        hls.destroy(); // Destroy HLS instance on fatal error
+            // --- 1. ABR and Latency Configuration ---
+            shakaPlayer.configure({
+                // Low Latency HLS (LL-HLS) configuration
+                streaming: {
+                    lowLatencyMode: true,
+                    // Suggested defaults for low latency / zero buffering
+                    bufferBehind: 2, // Keep small buffer (2 seconds)
+                    rebufferingGoal: 0.5,
+                    safeLiveDelay: 1.5, // Target live delay
+                    stallDetectionThreshold: 0.1, // Quick stall detection
+                },
+                abr: {
+                    defaultBandwidthEstimate: 1000000, // Start with a 1Mbps estimate
+                    switchInterval: 1, // Aggressive switch interval for quality
+                },
+                manifest: {
+                    // Enable HLS support
+                    defaultPresentationDelay: 0,
+                    hls: {
+                        enabled: true
                     }
-                });
+                }
+            });
 
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                // For native HLS support (e.g., Safari on desktop/mobile)
-                updateStatus('Browser supports native HLS. Attempting direct load...', 'info');
-                video.src = finalSource;
-                video.addEventListener('loadedmetadata', function() {
-                    video.play();
-                });
-                video.addEventListener('error', (e) => {
-                     updateStatus(`Native player error: Could not load the stream. Check the proxy/URL.`, 'error');
-                });
+            // --- 2. DRM Configuration ---
+            if (drmInfo) {
+                try {
+                    // Expected format: widevine:licenseUrl|pssh|customData
+                    const [keySystem, licenseDetails] = drmInfo.split(':');
+                    const [licenseServerUrl, pssh, customData] = licenseDetails.split('|');
+
+                    const drmConfig = {};
+                    drmConfig[keySystem] = {
+                        servers: [licenseServerUrl]
+                    };
+                    // Add PSSH (optional)
+                    if (pssh) {
+                         showMessage("DRM configuration set with PSSH. You may need to update the PSSH format for Shaka's config.", 5000, false);
+                         // For actual use, shaka needs specific PSSH structure if not automatically discovered.
+                         // For simplicity here, we rely on automatic PSSH discovery if possible, but the config structure is correct.
+                    }
+
+                    shakaPlayer.configure({ drm: drmConfig });
+                    showMessage(`DRM configured for ${keySystem}.`, 3000, false);
+
+                } catch (e) {
+                    showMessage("Error parsing DRM details from URL. Format should be: keySystem:licenseUrl|pssh|customData");
+                    console.error('DRM Parsing Error:', e);
+                }
+            }
+
+            // --- 3. Load the Stream ---
+            LOADING_SPINNER.classList.remove('hidden');
+            shakaPlayer.load(videoUrl).then(() => {
+                console.log('The video source has been loaded!');
+                VIDEO_PLAYER.play();
+                updatePlayPauseIcon();
+                LOADING_SPINNER.classList.add('hidden');
+            }).catch(e => {
+                onError(e);
+                LOADING_SPINNER.classList.add('hidden');
+            });
+        }
+
+        function onErrorEvent(event) {
+            onError(event.detail);
+        }
+
+        function onError(error) {
+            console.error('Shaka Player Error:', error);
+            showMessage(`Playback Error: ${error.code} - ${error.message}`);
+        }
+
+        /** Feature Implementation: Query Parsing and Initialization */
+        function parseQueryAndInit() {
+            const params = new URLSearchParams(window.location.search);
+            const videoUrl = params.get('url');
+            const drmInfo = params.get('drm');
+
+            if (videoUrl) {
+                document.getElementById('videoTitle').textContent = `Now Playing: ${videoUrl.substring(videoUrl.lastIndexOf('/') + 1)}`;
+                initShakaPlayer(videoUrl, drmInfo);
             } else {
-                updateStatus('Your browser does not support HLS streaming. Please use a modern browser.', 'error');
+                showMessage("No video URL found. Please use the format: ?url=link_to_manifest_or_mp4&drm=...", 0, true);
+                document.getElementById('videoTitle').textContent = 'Error: No Stream Loaded';
+            }
+        }
+
+        /** Feature Implementation: Controls Visibility */
+        function showControls() {
+            CONTROLS_OVERLAY.classList.remove('controls-hidden');
+            CONTROLS_OVERLAY.classList.add('controls-visible');
+
+            clearTimeout(controlsTimeout);
+            if (!VIDEO_PLAYER.paused && !isKidsLocked) {
+                // Hide controls after 3 seconds of inactivity
+                controlsTimeout = setTimeout(() => {
+                    CONTROLS_OVERLAY.classList.remove('controls-visible');
+                    CONTROLS_OVERLAY.classList.add('controls-hidden');
+                }, 3000);
+            }
+        }
+
+        function updatePlayPauseIcon() {
+            if (VIDEO_PLAYER.paused) {
+                PLAY_ICON.classList.remove('hidden');
+                PAUSE_ICON.classList.add('hidden');
+            } else {
+                PLAY_ICON.classList.add('hidden');
+                PAUSE_ICON.classList.remove('hidden');
+            }
+        }
+
+        /** Feature Implementation: Kids Lock */
+        function toggleKidsLock(forceState = null) {
+            isKidsLocked = forceState !== null ? forceState : !isKidsLocked;
+
+            if (isKidsLocked) {
+                // --- State: LOCKED ---
+                KIDS_LOCK_OVERLAY.classList.add('active');
+                VIDEO_CONTAINER.classList.add('kid-locked');
+                
+                // Show UNLOCK icon (open padlock) and hide LOCK icon (closed padlock)
+                LOCK_ICON.classList.add('hidden');
+                UNLOCK_ICON.classList.remove('hidden');
+                TOGGLE_LOCK_BTN.title = "Click to Unlock";
+                
+                // The lock button itself should look neutral/secure when locked
+                UNLOCK_ICON.classList.add('text-green-500'); 
+                
+                showMessage("Kids Lock Activated. Controls are disabled.", 3000, true);
+                showControls(); // Controls show momentarily then hide due to pointer-events:none;
+            } else {
+                // --- State: UNLOCKED (Default) ---
+                KIDS_LOCK_OVERLAY.classList.remove('active');
+                VIDEO_CONTAINER.classList.remove('kid-locked');
+
+                // Show LOCK icon (closed padlock) and hide UNLOCK icon (open padlock)
+                LOCK_ICON.classList.remove('hidden');
+                UNLOCK_ICON.classList.add('hidden');
+                TOGGLE_LOCK_BTN.title = "Click to Lock";
+
+                // The lock button should look neutral when unlocked
+                UNLOCK_ICON.classList.remove('text-green-500');
+                LOCK_ICON.classList.add('text-white');
+                
+                showMessage("Kids Lock Deactivated. Enjoy!", 3000, false);
+                showControls(); // Show controls immediately after unlocking
+            }
+        }
+
+        // --- Core Control Listeners ---
+        PLAY_PAUSE_BTN.addEventListener('click', () => {
+            if (VIDEO_PLAYER.paused) {
+                VIDEO_PLAYER.play();
+            } else {
+                VIDEO_PLAYER.pause();
             }
         });
-    </script>
 
+        VIDEO_PLAYER.addEventListener('play', updatePlayPauseIcon);
+        VIDEO_PLAYER.addEventListener('pause', updatePlayPauseIcon);
+        VIDEO_PLAYER.addEventListener('waiting', () => LOADING_SPINNER.classList.remove('hidden'));
+        VIDEO_PLAYER.addEventListener('playing', () => LOADING_SPINNER.classList.add('hidden'));
+
+        // --- Progress Bar ---
+        VIDEO_PLAYER.addEventListener('timeupdate', () => {
+            if (!isSeeking && VIDEO_PLAYER.duration) {
+                const progress = (VIDEO_PLAYER.currentTime / VIDEO_PLAYER.duration) * 100;
+                PROGRESS_RAIL.style.width = `${progress}%`;
+                TIME_DISPLAY.textContent = `${formatTime(VIDEO_PLAYER.currentTime)} / ${formatTime(VIDEO_PLAYER.duration)}`;
+            }
+        });
+
+        PROGRESS_BAR.addEventListener('click', (e) => {
+            const rect = PROGRESS_BAR.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const percentage = clickX / rect.width;
+            VIDEO_PLAYER.currentTime = percentage * VIDEO_PLAYER.duration;
+            showControls();
+        });
+
+        VIDEO_CONTAINER.addEventListener('mousemove', showControls);
+        VIDEO_CONTAINER.addEventListener('click', () => {
+            if (!isKidsLocked) showControls();
+        });
+
+        // --- Fullscreen ---
+        FULLSCREEN_BTN.addEventListener('click', () => {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                VIDEO_CONTAINER.requestFullscreen();
+            }
+        });
+
+        document.addEventListener('fullscreenchange', () => {
+            const isFullscreen = !!document.fullscreenElement;
+            FS_ICON.classList.toggle('hidden', isFullscreen);
+            EXIT_FS_ICON.classList.toggle('hidden', !isFullscreen);
+        });
+
+        // --- Quality / Adaptive Bitrate (ABR) Logic ---
+        function setupQualityOptions() {
+            shakaPlayer.addEventListener('trackschanged', () => {
+                // Only concern video for quality switch
+                const videoTracks = shakaPlayer.getVariantTracks().filter(t => t.type === 'video');
+
+                // Clear existing options
+                QUALITY_POP.innerHTML = '<h4 class="px-3 py-2 text-xs font-bold text-gray-400">Quality</h4>';
+
+                // 1. Auto Quality
+                const autoItem = document.createElement('div');
+                autoItem.className = 'popover-item active';
+                autoItem.textContent = 'Auto (Adaptive)';
+                autoItem.dataset.quality = 'auto';
+                autoItem.addEventListener('click', () => {
+                    shakaPlayer.configure({ abr: { enabled: true } });
+                    document.querySelectorAll('#qualityPopover .popover-item').forEach(el => el.classList.remove('active'));
+                    autoItem.classList.add('active');
+                    CURRENT_QUALITY.textContent = 'Auto';
+                    QUALITY_POP.classList.remove('popover-open');
+                });
+                QUALITY_POP.appendChild(autoItem);
+
+                // 2. Manual Qualities (Sorted highest to lowest)
+                const uniqueHeights = [...new Set(videoTracks.map(t => t.height))].sort((a, b) => b - a);
+
+                uniqueHeights.forEach(height => {
+                    const track = videoTracks.find(t => t.height === height);
+                    if (track) {
+                        const item = document.createElement('div');
+                        item.className = 'popover-item';
+                        item.textContent = `${height}p`;
+                        item.dataset.quality = height;
+                        item.addEventListener('click', () => {
+                            shakaPlayer.configure({ abr: { enabled: false } }); // Disable ABR
+                            shakaPlayer.selectVariantTrack(track); // Select specific track
+                            document.querySelectorAll('#qualityPopover .popover-item').forEach(el => el.classList.remove('active'));
+                            item.classList.add('active');
+                            CURRENT_QUALITY.textContent = `${height}p`;
+                            QUALITY_POP.classList.remove('popover-open');
+                        });
+                        QUALITY_POP.appendChild(item);
+                    }
+                });
+            });
+        }
+
+        // --- Quality/Speed Popover Toggles ---
+        function togglePopover(popover) {
+            const isOpen = popover.classList.contains('popover-open');
+            // Close the other popover first
+            if (popover === QUALITY_POP) {
+                SPEED_POP.classList.remove('popover-open');
+            } else {
+                QUALITY_POP.classList.remove('popover-open');
+            }
+
+            if (!isOpen) {
+                popover.classList.add('popover-open');
+            } else {
+                popover.classList.remove('popover-open');
+            }
+        }
+
+        QUALITY_BTN.addEventListener('click', (e) => {
+            e.stopPropagation();
+            togglePopover(QUALITY_POP);
+        });
+
+        SPEED_BTN.addEventListener('click', (e) => {
+            e.stopPropagation();
+            togglePopover(SPEED_POP);
+        });
+
+        // Speed selection
+        document.querySelectorAll('#speedPopover .popover-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const speed = parseFloat(item.dataset.speed);
+                VIDEO_PLAYER.playbackRate = speed;
+                document.getElementById('currentSpeed').textContent = `${speed}x`;
+                document.querySelectorAll('#speedPopover .popover-item').forEach(el => el.classList.remove('active'));
+                item.classList.add('active');
+                SPEED_POP.classList.remove('popover-open');
+            });
+        });
+
+        // Close popovers when clicking outside the controls
+        document.addEventListener('click', (e) => {
+            if (!CONTROLS_OVERLAY.contains(e.target) && !isKidsLocked) {
+                QUALITY_POP.classList.remove('popover-open');
+                SPEED_POP.classList.remove('popover-open');
+            }
+        });
+
+        // --- Feature Implementation: Gesture Controls (Double Tap/Click Seek) ---
+        let lastClickTime = 0;
+        const DOUBLE_CLICK_TIME = 300; // ms
+
+        VIDEO_PLAYER.addEventListener('click', (e) => {
+            if (isKidsLocked) {
+                e.stopPropagation();
+                toggleKidsLock(false); // Unlock on tap
+                return;
+            }
+
+            const clickTime = new Date().getTime();
+            if (clickTime - lastClickTime < DOUBLE_CLICK_TIME) {
+                e.preventDefault(); // Prevent accidental control hiding/toggling
+                const rect = VIDEO_PLAYER.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const width = rect.width;
+
+                const SEEK_AMOUNT = 10; // 10 seconds
+
+                if (clickX < width / 3) {
+                    // Left third: Seek Backward
+                    VIDEO_PLAYER.currentTime -= SEEK_AMOUNT;
+                    showSeekIndicator('backward', SEEK_AMOUNT);
+                } else if (clickX > 2 * width / 3) {
+                    // Right third: Seek Forward
+                    VIDEO_PLAYER.currentTime += SEEK_AMOUNT;
+                    showSeekIndicator('forward', SEEK_AMOUNT);
+                }
+                lastClickTime = 0; // Reset double-click detection
+            } else {
+                lastClickTime = clickTime;
+                // Standard single click behavior (show controls) is handled by mousemove/click event listener on container
+            }
+        });
+
+        function showSeekIndicator(direction, amount) {
+            const indicator = direction === 'forward' ? document.getElementById('seekForward') : document.getElementById('seekBackward');
+            const textEl = direction === 'forward' ? document.getElementById('forwardText') : document.getElementById('backwardText');
+
+            if (direction === 'forward') {
+                textEl.textContent = `+${amount}s`;
+            } else {
+                textEl.textContent = `-${amount}s`;
+            }
+
+            indicator.classList.remove('hidden');
+            indicator.style.opacity = 1;
+
+            clearTimeout(indicator.timeout);
+            indicator.timeout = setTimeout(() => {
+                indicator.style.opacity = 0;
+                setTimeout(() => indicator.classList.add('hidden'), 200);
+            }, 500);
+        }
+
+        // --- Feature Implementation: Shortcut Keys ---
+        document.addEventListener('keydown', (e) => {
+            if (isKidsLocked) return;
+
+            // Only respond if we're not typing in an input field
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            showControls(); // Always show controls on interaction
+
+            switch (e.key) {
+                case ' ': // Space: Play/Pause
+                    e.preventDefault();
+                    if (VIDEO_PLAYER.paused) {
+                        VIDEO_PLAYER.play();
+                    } else {
+                        VIDEO_PLAYER.pause();
+                    }
+                    break;
+                case 'ArrowRight': // Seek Forward (5s)
+                    e.preventDefault();
+                    VIDEO_PLAYER.currentTime += 5;
+                    showSeekIndicator('forward', 5);
+                    break;
+                case 'ArrowLeft': // Seek Backward (5s)
+                    e.preventDefault();
+                    VIDEO_PLAYER.currentTime -= 5;
+                    showSeekIndicator('backward', 5);
+                    break;
+                case 'ArrowUp': // Volume Up
+                    e.preventDefault();
+                    VIDEO_PLAYER.volume = Math.min(1, VIDEO_PLAYER.volume + 0.1);
+                    showMessage(`Volume: ${Math.round(VIDEO_PLAYER.volume * 100)}%`, 500, false);
+                    break;
+                case 'ArrowDown': // Volume Down
+                    e.preventDefault();
+                    VIDEO_PLAYER.volume = Math.max(0, VIDEO_PLAYER.volume - 0.1);
+                    showMessage(`Volume: ${Math.round(VIDEO_PLAYER.volume * 100)}%`, 500, false);
+                    break;
+                case 'f': // Fullscreen Toggle
+                case 'F':
+                    e.preventDefault();
+                    FULLSCREEN_BTN.click();
+                    break;
+                case 'm': // Mute Toggle
+                case 'M':
+                    e.preventDefault();
+                    VIDEO_PLAYER.muted = !VIDEO_PLAYER.muted;
+                    showMessage(VIDEO_PLAYER.muted ? "Muted" : "Unmuted", 500, false);
+                    break;
+                case 'p': // PiP Toggle
+                case 'P':
+                    e.preventDefault();
+                    document.getElementById('pipButton').click();
+                    break;
+            }
+        });
+
+        // --- Feature Implementation: Picture-in-Picture (PiP) ---
+        const pipButton = document.getElementById('pipButton');
+        if ('pictureInPictureEnabled' in document) {
+            pipButton.addEventListener('click', () => {
+                if (document.pictureInPictureElement) {
+                    document.exitPictureInPicture();
+                } else {
+                    VIDEO_PLAYER.requestPictureInPicture().catch(e => console.error('PiP Error:', e));
+                }
+            });
+        } else {
+            pipButton.classList.add('hidden'); // Hide button if not supported
+        }
+
+        // --- Feature Implementation: Kids Lock Listeners ---
+        KIDS_LOCK_OVERLAY.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent container click from doing anything else
+            toggleKidsLock(false);
+        });
+        TOGGLE_LOCK_BTN.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleKidsLock();
+        });
+
+        // --- Feature Implementation: Telegram Popup ---
+        window.onload = function() {
+            // Initialize the UI to the UNLOCKED state
+            toggleKidsLock(false); 
+
+            // Show popup briefly on load
+            setTimeout(() => {
+                TELEGRAM_POPUP.classList.add('show');
+            }, 500);
+
+            // Set up event listener for the close button
+            document.getElementById('closePopup').addEventListener('click', () => {
+                TELEGRAM_POPUP.classList.remove('show');
+            });
+
+            // Start Shaka setup
+            parseQueryAndInit();
+
+            // Set up quality change listener once Shaka is loaded
+            if (shakaPlayer) {
+                setupQualityOptions();
+            }
+
+            // Fallback for Shaka not loading tracks immediately (e.g. for simple MP4)
+            VIDEO_PLAYER.addEventListener('loadedmetadata', () => {
+                 if (shakaPlayer && !shakaPlayer.getVariantTracks().length) {
+                    document.getElementById('currentQuality').textContent = 'Source';
+                    document.getElementById('qualityButton').disabled = true;
+                    showMessage("Adaptive Bitrate features are disabled for this non-HLS/DASH source.", 3000, false);
+                 }
+            });
+        };
+    </script>
 </body>
 </html>
